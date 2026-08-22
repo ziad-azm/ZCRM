@@ -23,7 +23,7 @@ ZCRM/
 | Node.js | 24.x | frontend toolchain (v24.15.0 in use) |
 | npm | 11.x | frontend package management (11.12.1 in use) |
 | Angular CLI | 22.x | `ng` commands for `frontend/` (22.0.6 in use) |
-| Go | 1.23+ | backend build and tests — **not yet installed on the reference machine; required from ZCRM-3 onward** |
+| Go | 1.23+ | backend build and tests (1.26.7 in use) |
 | Docker Desktop | latest | local PostgreSQL — **required from ZCRM-5 onward** |
 
 ## Getting started
@@ -34,7 +34,15 @@ cd ZCRM
 git checkout develop
 ```
 
-`backend/` and `frontend/` are placeholders today — each holds only a `README.md` until **ZCRM-3** (Go backend) and **ZCRM-4** (Angular frontend) scaffold them. Those stories add their own build, run, and test steps to this README; there is nothing to install or run yet.
+`backend/` is a runnable Go service — see [backend/README.md](backend/README.md) for its layout, commands, and endpoints. `frontend/` is still a placeholder holding only a `README.md` until **ZCRM-4** (Angular frontend) scaffolds it.
+
+### Backend
+
+```bash
+cd backend
+go run ./cmd/api
+curl http://localhost:8080/health
+```
 
 ## Branching
 
