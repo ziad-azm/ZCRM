@@ -1,0 +1,55 @@
+# Managed by squad-kit — do not edit this block
+.squad/secrets.yaml
+.squad/stories/**/attachments/
+.squad/.trash/
+.squad/.last-run.json
+.squad/.last-copy-prompt.md
+.squad/runs/
+# End squad-kit block
+
+# ---------- Environment & secrets ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Go (backend/) ----------
+# Compiled binaries and test artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+backend/bin/
+backend/tmp/
+# Go workspace files (per-developer, never shared)
+go.work
+go.work.sum
+# Coverage
+coverage.out
+coverage.html
+
+# ---------- Node / Angular (frontend/) ----------
+node_modules/
+frontend/dist/
+.angular/
+frontend/tmp/
+frontend/out-tsc/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+frontend/coverage/
+testem.log
+
+# ---------- Editors & OS ----------
+.idea/
+.vs/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
