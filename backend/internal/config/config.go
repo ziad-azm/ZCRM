@@ -21,6 +21,7 @@ type Config struct {
 	Version  string
 	Log      Log
 	Server   Server
+	CORS     CORS
 	Database Database
 	Auth     Auth
 }
@@ -37,6 +38,24 @@ type Server struct {
 	WriteTimeout    time.Duration
 	IdleTimeout     time.Duration
 	ShutdownTimeout time.Duration
+}
+
+// CORS holds cross-origin request policy.
+type CORS struct {
+	AllowedOrigins []string
+	AllowedMethods []string
+	AllowedHeaders []string
+	MaxAge         int
+}
+
+// AllowsAnyOrigin reports whether the policy contains a wildcard.
+func (c CORS) AllowsAnyOrigin() bool {
+	for _, o := range c.AllowedOrigins {
+		if o == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 // Database holds PostgreSQL connection and pool configuration.
@@ -97,6 +116,21 @@ func Load() (*Config, error) {
 		WriteTimeout:    writeTimeout,
 		IdleTimeout:     idleTimeout,
 		ShutdownTimeout: shutdownTimeout,
+	}
+
+	corsMaxAge, err := getInt32("CORS_MAX_AGE", 300)
+	collect(err)
+
+	cfg.CORS = CORS{
+		// The Angular dev server's default origin. Production sets its real one.
+		AllowedOrigins: getStringSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:4200"}),
+		AllowedMethods: getStringSlice("CORS_ALLOWED_METHODS",
+			[]string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}),
+		// Authorization is allowed up front: ZCRM-9 sends a bearer token, and a
+		// missing entry here fails preflight in a way that looks like broken login.
+		AllowedHeaders: getStringSlice("CORS_ALLOWED_HEADERS",
+			[]string{"Accept", "Authorization", "Content-Type", "X-Requested-With"}),
+		MaxAge: int(corsMaxAge),
 	}
 
 	maxConns, err := getInt32("DB_MAX_CONNS", 10)

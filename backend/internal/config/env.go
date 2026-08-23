@@ -19,6 +19,30 @@ func getString(key, def string) string {
 	return def
 }
 
+// getStringSlice splits a comma-separated value, trimming each element and
+// dropping empties. Returns def when the variable is unset or has no usable
+// elements.
+func getStringSlice(key string, def []string) []string {
+	raw := getString(key, "")
+	if raw == "" {
+		return def
+	}
+
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+
+	if len(out) == 0 {
+		return def
+	}
+
+	return out
+}
+
 func getDuration(key string, def time.Duration) (time.Duration, error) {
 	raw := getString(key, "")
 	if raw == "" {

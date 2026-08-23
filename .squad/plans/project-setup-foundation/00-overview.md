@@ -11,6 +11,7 @@ Entry point for the **project-setup-foundation** feature. Stories execute in ord
 | 03 | [03-story-frontend-project-structure-ZCRM-4.md](03-story-frontend-project-structure-ZCRM-4.md) | Frontend Project Structure (Angular) | ZCRM-4 | 02 |
 | 04 | [04-story-database-migrations-ZCRM-5.md](04-story-database-migrations-ZCRM-5.md) | Database & Migrations (PostgreSQL) | ZCRM-5 | 02 |
 | 05 | [05-story-environment-configuration-ZCRM-6.md](05-story-environment-configuration-ZCRM-6.md) | Environment Configuration | ZCRM-6 | 04 |
+| 06 | [06-story-cors-frontend-api-client-ZCRM-7.md](06-story-cors-frontend-api-client-ZCRM-7.md) | CORS & Frontend API Client | ZCRM-7 | 05 |
 
 ## Dependency notes
 
@@ -28,6 +29,10 @@ Entry point for the **project-setup-foundation** feature. Stories execute in ord
 - Story 05 makes `backend/internal/config` the only package that reads the environment, and removes the DSN duplication Story 04 flagged: one root `.env` now drives both Docker Compose and the Go service, with `DATABASE_URL` composed from the same `POSTGRES_*` variables Compose reads.
 - Story 05 loads and validates `JWT_SECRET` (required when `APP_ENV=production`) but nothing consumes it until **ZCRM-9**. `CORS_ALLOWED_ORIGINS` is deliberately absent — **ZCRM-7** adds it.
 - **Angular environment files are blocked on ZCRM-4.** The Angular workspace exists only on `feature/ZCRM-4-frontend-structure`, so `frontend/src/environments/` cannot be created from a branch stacked on ZCRM-3/ZCRM-5. The typed `Environment` contract in Story 05 task 8 must be applied when ZCRM-4 resumes or after it merges.
+- Story 06 completes the feature. It adds `github.com/go-chi/cors v1.2.2` driven by `CORS_ALLOWED_ORIGINS` (default `http://localhost:4200`, wildcard rejected when `APP_ENV=production`) and the Angular `apiInterceptor`.
+- **Middleware order correction:** the chain becomes `RequestID → RealIP → RequestLogger → CORS → Recoverer`. Earlier notes (ZCRM-4 plan, `backend/README.md`) said CORS mounts *above* `RequestID`; that is wrong — preflight `OPTIONS` would never be logged, because `cors.Handler` short-circuits. Story 06 supersedes that guidance.
+- **Story 05 shipped without tests.** Commit `40bc9e0` added `internal/config/` but no `config_test.go`, and its build/vet/test run never completed. Story 06's task 1 verifies the backend before extending it, and its Test Plan writes the missing config tests.
+- **The frontend halves of Stories 05 and 06 are both blocked on ZCRM-4** (`environment.ts` / `environment.development.ts`, and the interceptor plus `start:direct`). The Angular workspace exists only on `feature/ZCRM-4-frontend-structure`, which still holds just `ng new`. Finish ZCRM-4, then apply Story 05 task 8 and Story 06 tasks 6–8.
 - Story 01's open item is closed: `main` was pushed to `origin` during the Story 02 implementation session, so the `develop` → `main` release path exists.
 - Go 1.26.7 was installed (via `winget install GoLang.Go`) during the Story 02 implementation session. `go.mod` targets `go 1.23`.
 - No cross-feature dependencies. A second feature folder (`authentication-user-management`, ZCRM-9) has been scaffolded under `.squad/stories/` but is not yet planned and is not indexed.

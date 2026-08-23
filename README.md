@@ -36,10 +36,20 @@ git checkout develop
 
 `backend/` is a runnable Go service — see [backend/README.md](backend/README.md) for its layout, commands, and endpoints. `frontend/` is still a placeholder holding only a `README.md` until **ZCRM-4** (Angular frontend) scaffolds it.
 
+## Configuration
+
+```bash
+cp .env.example .env
+```
+
+One root `.env` feeds both Docker Compose and the Go service. It is **git-ignored**; `.env.example` is committed and documents every variable. Real environment variables always win over the file, which always wins over the built-in defaults. See [backend/README.md](backend/README.md) for the full list and validation rules.
+
 ### Backend
 
 ```bash
+docker compose up -d          # PostgreSQL on :5432 (override with POSTGRES_PORT)
 cd backend
+cp ../.env.example ../.env    # first run only
 go run ./cmd/api
 curl http://localhost:8080/health
 ```

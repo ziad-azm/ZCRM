@@ -20,8 +20,7 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		// The logger is not configured yet: write plainly to stderr and stop.
-		fmt.Fprintf(os.Stderr, "configuration error: %v
-", err)
+		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
 		os.Exit(1)
 	}
 

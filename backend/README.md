@@ -10,6 +10,7 @@ backend/
 │   └── api/
 │       └── main.go             # entrypoint: logger, server, graceful shutdown
 ├── internal/
+│   ├── config/                 # the ONLY package that reads the environment
 │   ├── handlers/               # HTTP layer: decode/encode only
 │   ├── services/               # business layer
 │   ├── repositories/           # data access: postgres.go holds the pgxpool
@@ -23,9 +24,9 @@ backend/
 └── README.md
 ```
 
-Dependencies run one way only: `cmd → server → handlers → services → repositories`, with `models` importable by any layer. A service must never import a handler, and nothing under `internal/` imports `net/http` except `handlers`, `middleware`, and `server`. `internal/` is not importable from outside this module, so the layering cannot be bypassed.
+Dependencies run one way only: `cmd → server → handlers → services → repositories`, with `models` and `config` importable by any layer — both are leaves that import nothing internal. `services` deliberately does **not** import `config`: it takes plain values so it stays testable without a configuration fixture. A service must never import a handler, and nothing under `internal/` imports `net/http` except `handlers`, `middleware`, and `server`. `internal/` is not importable from outside this module, so the layering cannot be bypassed.
 
-The middleware chain in `internal/server/server.go` is order-sensitive: `RequestID → RealIP → RequestLogger → Recoverer`. `RequestID` must precede the logger or `request_id` logs empty, and the logger must precede `Recoverer` or a panicking route produces no log line.
+The middleware chain in `internal/server/server.go` is order-sensitive: `RequestID → RealIP → RequestLogger → CORS → Recoverer`. `RequestID` must precede the logger or `request_id` logs empty; the logger must precede `Recoverer` or a panicking route produces no log line; and **CORS must sit below `RequestLogger`** — `cors.Handler` answers a preflight and stops the chain, so mounted any higher, preflight requests would never be logged, which is exactly what you need when debugging CORS.
 
 ## Run
 
@@ -107,6 +108,61 @@ Files live in `migrations/` and **must** be named `{version}_{title}.up.sql` and
 
 If a migration fails halfway, golang-migrate marks the schema **dirty** and refuses to continue (`Dirty database version N. Fix and force version.`). Fix the SQL, then `migrate -path migrations -database "$DATABASE_URL" force <N-1>` and run `up` again.
 
+## Configuration
+
+Every setting comes from the environment through `internal/config`, the **only** package that calls `os.Getenv`.
+
+```bash
+cp .env.example .env          # from the repository root
+```
+
+Precedence, highest first: **real environment variables** → **`.env`** → **built-in defaults**. `godotenv.Load` never overwrites a variable that is already set, so a stale `.env` cannot override a deployment. `.env` is git-ignored; `.env.example` is committed and documents every variable.
+
+One root `.env` feeds both Docker Compose and the Go service. That is the payoff on a machine where port 5432 is already taken: set `POSTGRES_PORT=55432` once and it fixes the container's published port **and** the DSN the API composes.
+
+`DATABASE_URL` wins when set; otherwise the DSN is composed from `POSTGRES_USER`/`PASSWORD`/`HOST`/`PORT`/`DB`/`SSLMODE`, with credentials URL-escaped so a password containing `@`, `:` or `/` still works.
+
+Invalid configuration exits **before** the logger is built and reports **every** problem in one message, not the first:
+
+```text
+configuration error: invalid configuration: APP_ENV: "staging" is not a known environment (want development or production)
+PORT: "abc" is not a valid TCP port (want 1-65535)
+```
+
+`JWT_SECRET` is loaded and required when `APP_ENV=production`, but nothing reads it until **ZCRM-9**. In development it may be empty so a fresh clone runs with no setup. **No log line ever contains the DSN, the password, or the secret.**
+
+## CORS
+
+Driven by four variables, defaulting to the Angular dev server's origin:
+
+| Variable | Default |
+| -------- | ------- |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` |
+| `CORS_ALLOWED_METHODS` | `GET,POST,PUT,PATCH,DELETE,OPTIONS` |
+| `CORS_ALLOWED_HEADERS` | `Accept,Authorization,Content-Type,X-Requested-With` |
+| `CORS_MAX_AGE` | `300` |
+
+Rules enforced at startup: at least one origin; **`"*"` is rejected when `APP_ENV=production`**; every origin must be absolute (scheme + host) and carry **no path**, because browsers send `Origin` without one, so a configured trailing path would never match and would fail invisibly.
+
+`AllowCredentials` is **`false`**: authentication will use a bearer token in the `Authorization` header, not a cookie. It flips only if **ZCRM-9** chooses cookie sessions — and the wildcard escape hatch must be removed in the same change, since browsers reject wildcard-plus-credentials outright.
+
+Check it from the shell:
+
+```bash
+# Preflight from an allowed origin -> 200 + Access-Control-Allow-Origin + Max-Age
+curl -i -X OPTIONS http://localhost:8080/health   -H "Origin: http://localhost:4200"   -H "Access-Control-Request-Method: GET"
+
+# Actual cross-origin request -> 200 + Access-Control-Allow-Origin
+curl -i http://localhost:8080/health -H "Origin: http://localhost:4200"
+
+# Disallowed origin -> 200 with NO Access-Control-Allow-Origin header
+curl -i http://localhost:8080/health -H "Origin: http://evil.example.com"
+```
+
+**A disallowed origin is not an error status.** CORS is enforced by the *browser*: the server answers normally and simply omits the allow header, and the browser discards the response. Testing with `curl` alone will look like CORS is doing nothing — the absence of the header *is* the rejection.
+
+Two behaviours worth knowing: `go-chi/cors` answers preflight with a hardcoded **200** (not configurable, and any 2xx satisfies the spec), and it treats a request as preflight only when it carries **both** `Origin` and `Access-Control-Request-Method`. A bare `OPTIONS /health` is therefore not a preflight, reaches the router, and correctly gets `405` — browsers never send that. There is deliberately **no `OPTIONS` catch-all route**: registering one would make chi answer `405` instead of `404` for unknown paths.
+
 ## Endpoints
 
 | Method | Path | Status | Body |
@@ -121,6 +177,5 @@ Every request emits one JSON log line carrying `request_id`, `method`, `path`, `
 
 ## Not here yet
 
-- **Config loader** — `main.go` reads `PORT` and `DATABASE_URL` with `os.Getenv` and nothing else, and the dev DSN is duplicated in three places (`docker-compose.yml` defaults, `cmd/api/main.go`, `scripts/migrate.*`). **ZCRM-6** replaces that with a real loader and removes the duplication.
 - **Domain tables** — the only migration installs the shared `set_updated_at()` trigger function. Every real table (including `users`, which belongs to **ZCRM-9**) arrives with its own feature story.
-- **CORS** — **ZCRM-7** adds the middleware; it mounts above `RequestID` in the chain.
+- **Authentication** — **ZCRM-9** adds login, the `users` table, and JWT verification. `JWT_SECRET` is already loaded and validated; the Angular interceptor already has the marked place where the bearer token is attached. `AllowCredentials` stays `false` unless that story chooses cookie sessions instead.
