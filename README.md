@@ -34,7 +34,9 @@ cd ZCRM
 git checkout develop
 ```
 
-Both apps are runnable. See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for each one's layout, commands, and conventions. Start the backend first — the frontend dashboard reads its data from `GET /health`.
+Both apps run. See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for each one's layout, commands, and conventions.
+
+The backend is complete for this milestone: `GET /health`, a PostgreSQL pool, migrations, environment-driven configuration, and CORS. The frontend is **scaffolded but not yet wired to the API** — `ng new` has landed, while the `core`/`shared`/`features` split, Angular Material, the `ApiService`, the environment files, the dev-server proxy, and the HTTP interceptor are still outstanding (**ZCRM-4**, plus the deferred frontend halves of **ZCRM-6** and **ZCRM-7**). Until those land, the Angular app serves the default page and makes no backend calls.
 
 ## Configuration
 
