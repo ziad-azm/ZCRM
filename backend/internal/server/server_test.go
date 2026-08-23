@@ -10,10 +10,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/ziad-azm/ZCRM/backend/internal/config"
 	"github.com/ziad-azm/ZCRM/backend/internal/middleware"
 )
 
@@ -41,6 +43,14 @@ type fakePinger struct{}
 
 func (fakePinger) Ping(context.Context) error { return nil }
 
+// testConfig is the minimal config the router needs.
+func testConfig() *config.Config {
+	return &config.Config{
+		Version:  "test",
+		Database: config.Database{PingTimeout: 2 * time.Second},
+	}
+}
+
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
 }
@@ -48,7 +58,7 @@ func discardLogger() *slog.Logger {
 // TestRoutes covers the happy path plus the routing negatives that the trailing
 // slash and method behaviour depend on.
 func TestRoutes(t *testing.T) {
-	ts := httptest.NewServer(New(discardLogger(), "test", fakePinger{}))
+	ts := httptest.NewServer(New(discardLogger(), testConfig(), fakePinger{}))
 	defer ts.Close()
 
 	cases := []struct {
@@ -89,7 +99,7 @@ func TestHealthBodyAndLog(t *testing.T) {
 	logBuf := &lockedBuffer{}
 	log := slog.New(slog.NewJSONHandler(logBuf, nil))
 
-	ts := httptest.NewServer(New(log, "test", fakePinger{}))
+	ts := httptest.NewServer(New(log, testConfig(), fakePinger{}))
 	defer ts.Close()
 
 	resp, err := ts.Client().Get(ts.URL + "/health")

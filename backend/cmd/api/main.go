@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,43 +11,33 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ziad-azm/ZCRM/backend/internal/config"
 	"github.com/ziad-azm/ZCRM/backend/internal/repositories"
 	"github.com/ziad-azm/ZCRM/backend/internal/server"
 )
 
-// version is the reported build version. ZCRM-6 replaces this with config, and
-// a later story injects it at build time via -ldflags.
-const version = "0.1.0"
-
-const (
-	defaultPort        = "8080"
-	defaultDatabaseURL = "postgres://zcrm:zcrm@localhost:5432/zcrm?sslmode=disable"
-	shutdownTimeout    = 10 * time.Second
-	readTimeout        = 10 * time.Second
-	writeTimeout       = 15 * time.Second
-	idleTimeout        = 60 * time.Second
-)
-
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		// The logger is not configured yet: write plainly to stderr and stop.
+		fmt.Fprintf(os.Stderr, "configuration error: %v
+", err)
+		os.Exit(1)
+	}
+
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: cfg.Log.Level,
 	}))
 	slog.SetDefault(log)
 
-	// Minimal env read only. The full config loader is ZCRM-6, which also owns
-	// validating this value instead of letting ListenAndServe reject it.
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = defaultPort
-	}
+	// Never log the DSN or JWT_SECRET: logs travel further than secrets should.
+	log.Info("configuration loaded",
+		slog.String("env", cfg.Env),
+		slog.String("version", cfg.Version),
+		slog.String("log_level", cfg.Log.Level.String()),
+	)
 
-	// Minimal env read only, matching the PORT pattern above. ZCRM-6 replaces both.
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = defaultDatabaseURL
-	}
-
-	pool, err := repositories.NewPool(context.Background(), dsn)
+	pool, err := repositories.NewPool(context.Background(), cfg.Database)
 	if err != nil {
 		// A malformed DSN is a configuration error, not a transient outage.
 		log.Error("database pool", slog.Any("error", err))
@@ -65,11 +56,11 @@ func main() {
 	cancelProbe()
 
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      server.New(log, version, pool),
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
-		IdleTimeout:  idleTimeout,
+		Addr:         ":" + cfg.Server.Port,
+		Handler:      server.New(log, cfg, pool),
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
 
 	// Cancelled on Ctrl+C (SIGINT) or SIGTERM from a container runtime.
@@ -78,7 +69,7 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Info("server starting", slog.String("addr", srv.Addr), slog.String("version", version))
+		log.Info("server starting", slog.String("addr", srv.Addr), slog.String("version", cfg.Version))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 			return
@@ -93,10 +84,10 @@ func main() {
 			os.Exit(1)
 		}
 	case <-ctx.Done():
-		log.Info("shutdown signal received", slog.Duration("grace_period", shutdownTimeout))
+		log.Info("shutdown signal received", slog.Duration("grace_period", cfg.Server.ShutdownTimeout))
 		stop() // restore default signal handling: a second Ctrl+C kills immediately
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 		defer cancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {

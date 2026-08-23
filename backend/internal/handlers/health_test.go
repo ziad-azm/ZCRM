@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ziad-azm/ZCRM/backend/internal/models"
 	"github.com/ziad-azm/ZCRM/backend/internal/services"
@@ -20,7 +21,7 @@ func (fakePinger) Ping(context.Context) error { return nil }
 
 func TestHealthHandlerGet(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	h := NewHealthHandler(services.NewHealthService("test", fakePinger{}), log)
+	h := NewHealthHandler(services.NewHealthService("test", 2*time.Second, fakePinger{}), log)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

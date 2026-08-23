@@ -32,10 +32,11 @@ func TestHealthServiceCheck(t *testing.T) {
 	startedAt := time.Date(2026, time.August, 22, 12, 0, 0, 0, time.UTC)
 
 	svc := &HealthService{
-		startedAt: startedAt,
-		version:   "test",
-		now:       func() time.Time { return startedAt.Add(90 * time.Second) },
-		db:        &fakePinger{},
+		startedAt:   startedAt,
+		version:     "test",
+		now:         func() time.Time { return startedAt.Add(90 * time.Second) },
+		db:          &fakePinger{},
+		pingTimeout: 2 * time.Second,
 	}
 
 	got := svc.Check(context.Background())
@@ -55,7 +56,7 @@ func TestHealthServiceCheck(t *testing.T) {
 }
 
 func TestHealthServiceDatabaseUp(t *testing.T) {
-	svc := NewHealthService("test", &fakePinger{})
+	svc := NewHealthService("test", 2*time.Second, &fakePinger{})
 
 	got := svc.Check(context.Background())
 
@@ -70,7 +71,7 @@ func TestHealthServiceDatabaseUp(t *testing.T) {
 // TestHealthServiceDatabaseDown pins the liveness-not-readiness decision: a
 // failed ping must NOT degrade Status.
 func TestHealthServiceDatabaseDown(t *testing.T) {
-	svc := NewHealthService("test", &fakePinger{err: errors.New("boom")})
+	svc := NewHealthService("test", 2*time.Second, &fakePinger{err: errors.New("boom")})
 
 	got := svc.Check(context.Background())
 
@@ -83,7 +84,7 @@ func TestHealthServiceDatabaseDown(t *testing.T) {
 }
 
 func TestHealthServiceNilPinger(t *testing.T) {
-	svc := NewHealthService("test", nil)
+	svc := NewHealthService("test", 2*time.Second, nil)
 
 	got := svc.Check(context.Background())
 
@@ -95,7 +96,7 @@ func TestHealthServiceNilPinger(t *testing.T) {
 // TestHealthServicePingTimeout is the regression test for a hung database: the
 // probe must be bounded by pingTimeout rather than blocking the request.
 func TestHealthServicePingTimeout(t *testing.T) {
-	svc := NewHealthService("test", &fakePinger{block: true})
+	svc := NewHealthService("test", 50*time.Millisecond, &fakePinger{block: true})
 
 	start := time.Now()
 	got := svc.Check(context.Background())
@@ -104,7 +105,7 @@ func TestHealthServicePingTimeout(t *testing.T) {
 	if got.Database != models.DatabaseDown {
 		t.Errorf("Database = %q, want %q", got.Database, models.DatabaseDown)
 	}
-	if elapsed > pingTimeout+time.Second {
-		t.Errorf("Check took %v, want it bounded by pingTimeout (%v)", elapsed, pingTimeout)
+	if elapsed > time.Second {
+		t.Errorf("Check took %v, want it bounded by the 50ms pingTimeout", elapsed)
 	}
 }

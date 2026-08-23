@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/ziad-azm/ZCRM/backend/internal/config"
 	"github.com/ziad-azm/ZCRM/backend/internal/handlers"
 	"github.com/ziad-azm/ZCRM/backend/internal/middleware"
 	"github.com/ziad-azm/ZCRM/backend/internal/repositories"
@@ -15,7 +16,7 @@ import (
 )
 
 // New returns the application router with all routes and middleware mounted.
-func New(log *slog.Logger, version string, db repositories.Pinger) http.Handler {
+func New(log *slog.Logger, cfg *config.Config, db repositories.Pinger) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
@@ -23,7 +24,10 @@ func New(log *slog.Logger, version string, db repositories.Pinger) http.Handler 
 	r.Use(middleware.RequestLogger(log))
 	r.Use(chimw.Recoverer)
 
-	health := handlers.NewHealthHandler(services.NewHealthService(version, db), log)
+	health := handlers.NewHealthHandler(
+		services.NewHealthService(cfg.Version, cfg.Database.PingTimeout, db),
+		log,
+	)
 	r.Get("/health", health.Get)
 
 	return r

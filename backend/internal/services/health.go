@@ -8,21 +8,25 @@ import (
 	"github.com/ziad-azm/ZCRM/backend/internal/repositories"
 )
 
-// pingTimeout bounds the database probe so a hung database cannot hang /health.
-const pingTimeout = 2 * time.Second
-
 // HealthService reports process liveness and dependency reachability.
 type HealthService struct {
-	startedAt time.Time
-	version   string
-	now       func() time.Time // injected for tests
-	db        repositories.Pinger
+	startedAt   time.Time
+	version     string
+	now         func() time.Time // injected for tests
+	db          repositories.Pinger
+	pingTimeout time.Duration
 }
 
 // NewHealthService returns a HealthService that treats now as the process start.
 // db may be nil, in which case the database is reported as down.
-func NewHealthService(version string, db repositories.Pinger) *HealthService {
-	return &HealthService{startedAt: time.Now(), version: version, now: time.Now, db: db}
+func NewHealthService(version string, pingTimeout time.Duration, db repositories.Pinger) *HealthService {
+	return &HealthService{
+		startedAt:   time.Now(),
+		version:     version,
+		now:         time.Now,
+		db:          db,
+		pingTimeout: pingTimeout,
+	}
 }
 
 // Check returns the current health snapshot. It always succeeds: an unreachable
@@ -48,7 +52,7 @@ func (s *HealthService) databaseStatus(ctx context.Context) string {
 		return models.DatabaseDown
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, pingTimeout)
+	ctx, cancel := context.WithTimeout(ctx, s.pingTimeout)
 	defer cancel()
 
 	if err := s.db.Ping(ctx); err != nil {
