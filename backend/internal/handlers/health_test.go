@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -12,9 +13,14 @@ import (
 	"github.com/ziad-azm/ZCRM/backend/internal/services"
 )
 
+// fakePinger reports the database as reachable without a real database.
+type fakePinger struct{}
+
+func (fakePinger) Ping(context.Context) error { return nil }
+
 func TestHealthHandlerGet(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	h := NewHealthHandler(services.NewHealthService("test"), log)
+	h := NewHealthHandler(services.NewHealthService("test", fakePinger{}), log)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -40,5 +46,8 @@ func TestHealthHandlerGet(t *testing.T) {
 	}
 	if got.Timestamp.IsZero() {
 		t.Error("Timestamp is zero, want a populated time")
+	}
+	if got.Database != models.DatabaseUp {
+		t.Errorf("Database = %q, want %q", got.Database, models.DatabaseUp)
 	}
 }

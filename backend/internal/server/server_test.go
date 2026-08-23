@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -35,6 +36,11 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
+// fakePinger stands in for the database so these tests need no PostgreSQL.
+type fakePinger struct{}
+
+func (fakePinger) Ping(context.Context) error { return nil }
+
 func discardLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
 }
@@ -42,7 +48,7 @@ func discardLogger() *slog.Logger {
 // TestRoutes covers the happy path plus the routing negatives that the trailing
 // slash and method behaviour depend on.
 func TestRoutes(t *testing.T) {
-	ts := httptest.NewServer(New(discardLogger(), "test"))
+	ts := httptest.NewServer(New(discardLogger(), "test", fakePinger{}))
 	defer ts.Close()
 
 	cases := []struct {
@@ -83,7 +89,7 @@ func TestHealthBodyAndLog(t *testing.T) {
 	logBuf := &lockedBuffer{}
 	log := slog.New(slog.NewJSONHandler(logBuf, nil))
 
-	ts := httptest.NewServer(New(log, "test"))
+	ts := httptest.NewServer(New(log, "test", fakePinger{}))
 	defer ts.Close()
 
 	resp, err := ts.Client().Get(ts.URL + "/health")

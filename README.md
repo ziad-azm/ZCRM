@@ -23,8 +23,8 @@ ZCRM/
 | Node.js | 24.x | frontend toolchain (v24.15.0 in use) |
 | npm | 11.x | frontend package management (11.12.1 in use) |
 | Angular CLI | 22.x | `ng` commands for `frontend/` (22.0.6 in use) |
-| Go | 1.23+ | backend build and tests (1.26.7 in use) |
-| Docker Desktop | latest | local PostgreSQL — **required from ZCRM-5 onward** |
+| Go | 1.25+ | backend build and tests (1.26.7 in use; pgx v5.10.0 sets the 1.25 floor) |
+| Docker Desktop | latest | local PostgreSQL via `docker compose up -d` (20.10.22 / Compose v2.15.1 in use) |
 
 ## Getting started
 

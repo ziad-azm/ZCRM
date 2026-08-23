@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: zcrm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zcrm}
+      POSTGRES_USER: ${POSTGRES_USER:-zcrm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zcrm}
+      # Keeps initdb deterministic across developer machines.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images require the mount at /var/lib/postgresql (NOT
+      # .../data): they store data in a major-version subdirectory so
+      # `pg_upgrade --link` works across a single mount point. Mounting
+      # .../data makes the container fail at startup and restart-loop.
+      - zcrm-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zcrm} -d ${POSTGRES_DB:-zcrm}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  zcrm-postgres-data:

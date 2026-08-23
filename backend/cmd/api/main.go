@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ziad-azm/ZCRM/backend/internal/repositories"
 	"github.com/ziad-azm/ZCRM/backend/internal/server"
 )
 
@@ -18,11 +19,12 @@ import (
 const version = "0.1.0"
 
 const (
-	defaultPort     = "8080"
-	shutdownTimeout = 10 * time.Second
-	readTimeout     = 10 * time.Second
-	writeTimeout    = 15 * time.Second
-	idleTimeout     = 60 * time.Second
+	defaultPort        = "8080"
+	defaultDatabaseURL = "postgres://zcrm:zcrm@localhost:5432/zcrm?sslmode=disable"
+	shutdownTimeout    = 10 * time.Second
+	readTimeout        = 10 * time.Second
+	writeTimeout       = 15 * time.Second
+	idleTimeout        = 60 * time.Second
 )
 
 func main() {
@@ -38,9 +40,33 @@ func main() {
 		port = defaultPort
 	}
 
+	// Minimal env read only, matching the PORT pattern above. ZCRM-6 replaces both.
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = defaultDatabaseURL
+	}
+
+	pool, err := repositories.NewPool(context.Background(), dsn)
+	if err != nil {
+		// A malformed DSN is a configuration error, not a transient outage.
+		log.Error("database pool", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	// One eager probe so startup logs say plainly whether the database answered.
+	// A failure is not fatal: /health reports it and the API keeps serving.
+	probeCtx, cancelProbe := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := pool.Ping(probeCtx); err != nil {
+		log.Warn("database unreachable at startup", slog.Any("error", err))
+	} else {
+		log.Info("database connected")
+	}
+	cancelProbe()
+
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      server.New(log, version),
+		Handler:      server.New(log, version, pool),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,

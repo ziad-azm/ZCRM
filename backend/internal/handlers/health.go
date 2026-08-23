@@ -21,7 +21,7 @@ func NewHealthHandler(svc *services.HealthService, log *slog.Logger) *HealthHand
 
 // Get responds 200 with the health snapshot as JSON.
 func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) {
-	resp := h.svc.Check()
+	resp := h.svc.Check(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
