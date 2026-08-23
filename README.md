@@ -34,7 +34,7 @@ cd ZCRM
 git checkout develop
 ```
 
-`backend/` is a runnable Go service — see [backend/README.md](backend/README.md) for its layout, commands, and endpoints. `frontend/` is still a placeholder holding only a `README.md` until **ZCRM-4** (Angular frontend) scaffolds it.
+Both apps are runnable. See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for each one's layout, commands, and conventions. Start the backend first — the frontend dashboard reads its data from `GET /health`.
 
 ### Backend
 
@@ -42,6 +42,14 @@ git checkout develop
 cd backend
 go run ./cmd/api
 curl http://localhost:8080/health
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm start        # http://localhost:4200 — needs the backend running on :8080
 ```
 
 ## Branching
